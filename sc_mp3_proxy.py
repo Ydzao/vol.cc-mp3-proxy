@@ -15,7 +15,7 @@ MAX_TRACK_SECONDS = 900          # cut anything longer than 15 min
 FFMPEG_TIMEOUT_S = 150
 MAX_CONCURRENT_JOBS = 2
 RATE_LIMIT_PER_MINUTE = 12       # per client IP
-ALLOWED_SUFFIX = ".sndcdn.com"
+ALLOWED_SUFFIXES = (".sndcdn.com", ".soundcloud.cloud")  # SoundCloud moved HLS to soundcloud.cloud
 
 jobs = threading.BoundedSemaphore(MAX_CONCURRENT_JOBS)
 recent_hits = defaultdict(deque)
@@ -56,6 +56,9 @@ def transcode(src: str) -> bytes:
 
 
 class Handler(BaseHTTPRequestHandler):
+    error_message_format = "%(code)d %(message)s"  # plain text so the Lua status line stays readable
+    error_content_type = "text/plain"
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/":
@@ -68,8 +71,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         src = parse_qs(parsed.query).get("src", [""])[0]
         url = urlparse(src)
-        if url.scheme != "https" or not (url.hostname or "").endswith(ALLOWED_SUFFIX):
-            self.send_error(400, "only https *.sndcdn.com playlists")
+        if url.scheme != "https" or not (url.hostname or "").endswith(ALLOWED_SUFFIXES):
+            self.send_error(400, "only https SoundCloud CDN playlists")
             return
         if rate_limited(client_ip(self)):
             self.send_error(429, "slow down")
